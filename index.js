@@ -14,7 +14,8 @@ const CONFIG = {
   SPREAD_ENTRY_THRESHOLD: parseFloat(process.env.SPREAD_ENTRY_THRESHOLD || '0.3'),
 
   // Поріг ВИХОДУ: якщо |spread| <= цього значення → вважаємо позицію закритою
-  SPREAD_EXIT_THRESHOLD:  parseFloat(process.env.SPREAD_EXIT_THRESHOLD  || '0.1'),
+  // Рекомендовано 0.15-0.2%, бо markPrice рідко падає нижче цього навіть при "рівновазі"
+  SPREAD_EXIT_THRESHOLD:  parseFloat(process.env.SPREAD_EXIT_THRESHOLD  || '0.15'),
 
   // Мінімальна пауза між двома Entry-сповіщеннями для одного символу (мс)
   // Захист від "флікерингу" якщо спред стрибає навколо порогу
@@ -38,8 +39,9 @@ if (!CONFIG.TELEGRAM_BOT_TOKEN || !CONFIG.TELEGRAM_CHAT_ID) {
 const tg = new TelegramBot(CONFIG.TELEGRAM_BOT_TOKEN);
 
 const state = {
-  activeSignals: new Map(), // symbol → { direction, entryTime, entrySpread }
-  lastSignalTime: new Map(), // symbol → timestamp (для cooldown)
+  activeSignals: new Map(),   // symbol → { direction, entryTime, entrySpread }
+  lastSignalTime: new Map(),  // symbol → timestamp (для cooldown)
+  lastIndexPrice: new Map(),  // symbol → indexPrice (кеш — стрім іноді не шле item.i)
   ws: null,
   forcedReconnectTimer: null,
   reconnectTimer: null,
@@ -144,10 +146,17 @@ function connect() {
       if (!Array.isArray(arr)) return;
 
       for (const item of arr) {
-        // item.e === 'markPriceUpdate'
-        const symbol     = item.s;
-        const markPrice  = parseFloat(item.p);
-        const indexPrice = parseFloat(item.i);
+        const symbol    = item.s;
+        const markPrice = parseFloat(item.p);
+
+        // indexPrice (item.i) іноді відсутній у пакеті — беремо з кешу
+        let indexPrice = parseFloat(item.i);
+        if (!isNaN(indexPrice) && indexPrice > 0) {
+          state.lastIndexPrice.set(symbol, indexPrice);
+        } else {
+          indexPrice = state.lastIndexPrice.get(symbol) ?? NaN;
+        }
+
         if (!symbol || isNaN(markPrice) || isNaN(indexPrice)) continue;
         processMarkPrice(symbol, markPrice, indexPrice);
       }
