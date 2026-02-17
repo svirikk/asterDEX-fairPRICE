@@ -1,0 +1,16 @@
+{
+  "name": "asterdex-spread-monitor",
+  "version": "1.0.0",
+  "description": "Asterdex mark/index price spread monitor with Telegram alerts",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "dotenv": "^16.4.5",
+    "node-telegram-bot-api": "^0.66.0",
+    "ws": "^8.16.0"
+  }
+}
